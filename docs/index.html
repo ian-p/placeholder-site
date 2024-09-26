@@ -1,105 +1,105 @@
 <!DOCTYPE html>
 <html>
-  <head>
-    <meta charset="utf-8">
-    <title></title>
-    <style>
-      body, html {
-        margin: 0;
-        padding: 0;
-        overflow: hidden;
-        background-color: white;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        height: 100vh;
-      }
-      canvas {
-        display: block;
-        max-width: 700px;
-        max-height: 700px;
-        width: 100%;
-        height: 100%;
-      }
-    </style>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/processing.js/1.6.6/processing.min.js"></script>
-  </head>
-  <body>
-    <script type="application/processing">
-      int cols, rows;
-      int scl = 22;  
-      int w, h;  
-      float t = 0;
+<head>
+  <meta charset="utf-8">
+  <title>.</title>
+  <style>
+    body, html {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background-color: white;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+    canvas {
+      display: block;
+      max-width: 700px;
+      max-height: 700px;
+      width: 100%;
+      height: 100%;
+    }
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+</head>
+<body>
+<script>
+  let cols, rows;
+  let scl = 22;
+  let w, h;
+  let t = 0;
 
-      void setup() {
-      	setup_display();
-      }
+  function setup() {
+    setupDisplay();
+  }
 
-	  void setup_display() {
-        w = min(700, int(window.innerWidth));
-        h = min(700, int(window.innerHeight));
-        size(w, h);
-        smooth();
-        cols = w / scl;
-        rows = h / scl;	  
-	  }
+  function setupDisplay() {
+    w = min(700, windowWidth);
+    h = min(700, windowHeight);
+    createCanvas(w, h);
+    cols = w / scl;
+    rows = h / scl;
+  }
 
-      void draw() {
-        t += .05;
+  function draw() {
+    t += 0.05;
+    let color_mode = 0;
 
-        int color_mode = 0;
-        if (t % 16 >= 8) {
-          color_mode = 1;
-          background(0);
-        } else {
-          background(255);
+    if (t % 16 >= 8) {
+      color_mode = 1;
+      background(0);
+    } else {
+      background(255);
+    }
+
+    for (let i = 0; i < rows; i++) {
+      for (let j = 0; j < cols; j++) {
+        // Calculate the x and y positions in the grid
+        let x = i * scl;
+        let y = j * scl;
+
+        let c1_mod = 8;
+        let c1_offset = 0;
+
+        if (color_mode == 1) {
+          c1_mod = 8 + sin(t / 160) * 3;
+          c1_offset = sin(t / 3) * 70;
         }
 
-        for (int i = 0; i < rows; i++) {
-          for (int j = 0; j < cols; j++) {
-            // Calculate the x and y positions in the grid
-            float x = i * scl;
-            float y = j * scl;
+        let c1 = 30 * ((140 * noise(0.01 * x * y, 0.06 * x + y)) % c1_mod) + c1_offset;
+        let offset_x = x + 30 * sin(t / 22 + j);
+        x += offset_x;
 
-            int c1_mod = 8;
-            int c1_offset = 0;
-            if (color_mode == 1) {
-              c1_mod = 8 + sin(t/160) * 3;
-              c1_offset = sin(t / 3) * 70;
-            }
-            float c1 = 30 * ((140 * noise(0.01 * x * y, 0.06 * x + y)) % c1_mod) + c1_offset;            
-            float offset_x = x + 30 * sin(t / 22 + j);
-            x += offset_x;      
+        let p1 = t / 17 + cos(t / 19);
+        let p2 = sin(t / 13) * sin(t / 17);
+        let angle = (0.3 + sin(t / 22)) * noise(x * 0.01, y * 0.01) * 6
+                + (3 + cos(t / 16 - 2)) * noise(x * 0.003 + p1, y * 0.004 + p2);
+        angle *= 0.7;
 
-            float p1 = t / 17 + cos(t / 19);
-            float p2 = sin(t / 13) * sin(t / 17);
-            float angle = (0.3 + sin(t / 22)) * noise(x * 0.01, y * 0.01) * 6 
-            + (3 + cos(t / 16 - 2)) * noise(x * 0.003 + p1, y * 0.004 + p2);
-            angle *= 0.7;
+        let v = p5.Vector.fromAngle(angle);
+        fill(c1);
+        v.mult(scl * 2);
 
-            PVector v = PVector.fromAngle(angle);
-            fill(c1);
-            v.mult(scl * 2);
+        stroke(0);
+        push();
+        translate(x, y);
+        rotate(angle);
+        rect(0, 0, 40 + sin(0.02 * x - 0.06 * y) * 20, 20);
+        stroke(100);
+        line(0, 22, 50, 22);
+        stroke(200);
+        line(0, 25, 80, 25);
 
-            stroke(0);
-            pushMatrix();      
-            translate(x, y);
-            rotate(angle);
-            rect(0, 0, 40 + sin(.02 * x - 0.06 * y) * 20, 20);
-            stroke(100);
-            line(0, 22, 50, 22);
-            stroke(200);
-            line(0, 25, 80, 25);
-
-            popMatrix();
-          }
-        }
+        pop();
       }
+    }
+  }
 
-      void windowResized() {
-      	setup_display();
-      }
-    </script>
-    <canvas></canvas>
-  </body>
+  function windowResized() {
+    setupDisplay();
+  }
+</script>
+</body>
 </html>
