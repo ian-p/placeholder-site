@@ -172,6 +172,11 @@
 
   function setup() {
 
+    if (window.innerWidth < 800) {
+      sizeConfig[0][1] = 6;
+      sizeConfig[1][0] = 6;
+    }
+
     let background = document.createElementNS("http://www.w3.org/2000/svg", "rect");
     background.setAttribute("width", window.innerWidth);
     background.setAttribute("height", window.innerHeight);
