@@ -1,311 +1,364 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>...</title>
-  <style>
-    body, html {
-      margin: 0;
-      padding: 0;
-      overflow: hidden;
-      width: 100%;
-      height: 100%;
-    }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>...</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            width: 100%;
+            height: 100%;
+        }
 
-    svg {
-      width: 100%;
-      height: 100%;
-      display: block;
-      position: absolute;
-      top: 0;
-      left: 0;
-    }
-  </style>
+        svg {
+            width: 100%;
+            height: 100%;
+            display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+    </style>
 </head>
 <body>
 <svg id="svgCanvas" xmlns="http://www.w3.org/2000/svg"></svg>
 
 <script>
-  class Perlin {
-    constructor() {
-      this.perm = [];
-      for (let i = 0; i < 256; i++) this.perm[i] = i;
-      this.perm.sort(() => Math.random() - 0.5);
-      this.perm = [...this.perm, ...this.perm]; // Repeat to avoid overflow
+    const WIDE_SCREEN_WIDTH_BREAKPOINT = 800;
+    const noiseScale = 0.018 + Math.random() * 0.01;
+    const trailSpacing = 1.2;
+    const useGradients = true;
+
+    const sizeConfigs = [
+        [
+            [0, 8, 8],
+            [20, 4, 4],
+            [100, 1, 1]
+        ],
+        [
+            [0, 4, 4],
+            [20, 2, 2],
+            [100, 1, 1]
+        ],
+    ];
+
+    if (window.innerWidth >= WIDE_SCREEN_WIDTH_BREAKPOINT) {
+        sizeConfigs.push([
+            [0, 9, 11],
+            [20, 6, 8],
+            [100, 1, 1.5]
+        ]);
+
+        sizeConfigs.push([
+            [0, 8, 10],
+            [30, 6, 8],
+            [100, 1, 1]
+        ]);
     }
 
-    fade(t) {
-      return t * t * t * (t * (t * 6 - 15) + 10);
+    const sizeConfig = sizeConfigs[Math.floor(Math.random() * sizeConfigs.length)];
+
+    let palettes = [
+        "dad7cd-a3b18a-588157-3a5a40-344e41",
+        "6f1d1b-bb9457-432818-99582a-ffe6a7",
+        "001427-708d81-f4d58d-bf0603-8d0801",
+        "006d77-83c5be-edf6f9-ffddd2-e29578",
+        "01161e-124559-598392-aec3b0-eff6e0",
+        "582f0e-7f4f24-936639-a68a64-b6ad90-c2c5aa-a4ac86-656d4a-414833-333d29",
+    ];
+
+    let hexColors;
+
+    let trails = [];
+    let gridScale = 10;
+    const forceScalar = 2;
+    let flowField;
+    let flowFieldCols, flowFieldRows;
+    const svgCanvas = document.getElementById("svgCanvas");
+
+    class Perlin {
+        constructor() {
+            this.perm = [];
+            for (let i = 0; i < 256; i++) this.perm[i] = i;
+            this.perm.sort(() => Math.random() - 0.5);
+            this.perm = [...this.perm, ...this.perm];
+        }
+
+        fade(t) {
+            return t * t * t * (t * (t * 6 - 15) + 10);
+        }
+
+        lerp(t, a, b) {
+            return a + t * (b - a);
+        }
+
+        grad(hash, x, y) {
+            let h = hash & 15;
+            let u = h < 8 ? x : y;
+            let v = h < 4 ? y : h === 12 || h === 14 ? x : 0;
+            return ((h & 1) === 0 ? u : -u) + ((h & 2) === 0 ? v : -v);
+        }
+
+        noise(x, y) {
+            let X = Math.floor(x) & 255;
+            let Y = Math.floor(y) & 255;
+
+            x -= Math.floor(x);
+            y -= Math.floor(y);
+
+            let u = this.fade(x);
+            let v = this.fade(y);
+
+            let aa = this.perm[X] + Y;
+            let ab = this.perm[X] + Y + 1;
+            let ba = this.perm[X + 1] + Y;
+            let bb = this.perm[X + 1] + Y + 1;
+
+            return this.lerp(v, this.lerp(u, this.grad(this.perm[aa], x, y), this.grad(this.perm[ba], x - 1, y)),
+                this.lerp(u, this.grad(this.perm[ab], x, y - 1), this.grad(this.perm[bb], x - 1, y - 1)));
+        }
     }
 
-    lerp(t, a, b) {
-      return a + t * (b - a);
+    class LineSegment {
+        constructor(position, radius) {
+            this.position = position;
+            this.radius = radius;
+        }
     }
 
-    grad(hash, x, y) {
-      let h = hash & 15;
-      let u = h < 8 ? x : y;
-      let v = h < 4 ? y : h === 12 || h === 14 ? x : 0;
-      return ((h & 1) === 0 ? u : -u) + ((h & 2) === 0 ? v : -v);
+    class ParticleTrail {
+        constructor() {
+            this.points = [];
+            this.size = 0;
+            this.mainColor = "#000000";
+            this.topLeft = {x: Infinity, y: Infinity};
+            this.bottomRight = {x: -Infinity, y: -Infinity};
+        }
+
+        updateAABB() {
+            this.topLeft = {x: Infinity, y: Infinity};
+            this.bottomRight = {x: -Infinity, y: -Infinity};
+
+            for (let segment of this.points) {
+                let pos = segment.position;
+                let radius = segment.radius;
+
+                if (pos.x - radius < this.topLeft.x) this.topLeft.x = pos.x - radius;
+                if (pos.y - radius < this.topLeft.y) this.topLeft.y = pos.y - radius;
+
+                if (pos.x + radius > this.bottomRight.x) this.bottomRight.x = pos.x + radius;
+                if (pos.y + radius > this.bottomRight.y) this.bottomRight.y = pos.y + radius;
+            }
+        }
+
+        checkCollision(pos, size) {
+            if (
+                pos.x + size <= this.topLeft.x ||
+                pos.x - size >= this.bottomRight.x ||
+                pos.y + size <= this.topLeft.y ||
+                pos.y - size >= this.bottomRight.y
+            ) {
+                return false;
+            }
+
+            for (let segment of this.points) {
+                if (Math.hypot(segment.position.x - pos.x, segment.position.y - pos.y) < size + segment.radius) {
+                    return true;
+                }
+            }
+            return false;
+        }
     }
 
-    noise(x, y) {
-      let X = Math.floor(x) & 255;
-      let Y = Math.floor(y) & 255;
-
-      x -= Math.floor(x);
-      y -= Math.floor(y);
-
-      let u = this.fade(x);
-      let v = this.fade(y);
-
-      let aa = this.perm[X] + Y;
-      let ab = this.perm[X] + Y + 1;
-      let ba = this.perm[X + 1] + Y;
-      let bb = this.perm[X + 1] + Y + 1;
-
-      return this.lerp(v, this.lerp(u, this.grad(this.perm[aa], x, y), this.grad(this.perm[ba], x - 1, y)),
-              this.lerp(u, this.grad(this.perm[ab], x, y - 1), this.grad(this.perm[bb], x - 1, y - 1)));
-    }
-  }
-
-  class LineSegment {
-    constructor(position, radius) {
-      this.position = position;
-      this.radius = radius;
+    function extractHexColors(palettes) {
+        let randomUrl = palettes[Math.floor(Math.random() * palettes.length)];
+        return randomUrl.split("-");
     }
 
-    copy() {
-      return new LineSegment({...this.position}, this.radius);
-    }
-  }
-
-  class ParticleTrail {
-    constructor() {
-      this.points = [];
-      this.size = 0;
-      this.mainColor = "#000000";
-      this.topLeft = {x: Infinity, y: Infinity};
-      this.bottomRight = {x: -Infinity, y: -Infinity};
+    function getRandomColor(hexColors) {
+        return `#${hexColors[Math.floor(Math.random() * hexColors.length)]}`;
     }
 
-    updateAABB() {
-      this.topLeft = {x: Infinity, y: Infinity};
-      this.bottomRight = {x: -Infinity, y: -Infinity};
+    let perlinNoise = new Perlin();
 
-      for (let segment of this.points) {
-        let pos = segment.position;
-        let radius = segment.radius;
+    function setup() {
+        if (window.innerWidth < WIDE_SCREEN_WIDTH_BREAKPOINT) {
+            sizeConfig[1][0] = 6;
+        }
 
-        if (pos.x - radius < this.topLeft.x) this.topLeft.x = pos.x - radius;
-        if (pos.y - radius < this.topLeft.y) this.topLeft.y = pos.y - radius;
+        let background = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+        background.setAttribute("width", window.innerWidth);
+        background.setAttribute("height", window.innerHeight);
+        background.setAttribute("fill", "#0f1020");
+        svgCanvas.appendChild(background);
 
-        if (pos.x + radius > this.bottomRight.x) this.bottomRight.x = pos.x + radius;
-        if (pos.y + radius > this.bottomRight.y) this.bottomRight.y = pos.y + radius;
-      }
+        flowFieldCols = Math.floor(window.innerWidth / gridScale);
+        flowFieldRows = Math.floor(window.innerHeight / gridScale);
+        hexColors = extractHexColors(palettes);
+        flowField = new Array(flowFieldCols).fill().map(() => new Array(flowFieldRows).fill(null));
+
+        for (let i = 0; i < flowFieldCols; i++) {
+            for (let j = 0; j < flowFieldRows; j++) {
+                const angle = perlinNoise.noise(i * noiseScale, j * noiseScale) * Math.PI * 2;
+                flowField[i][j] = {x: Math.cos(angle), y: Math.sin(angle)};
+            }
+        }
     }
 
-    getAABBCenter() {
-      let dimensions = {
-        x: this.bottomRight.x - this.topLeft.x,
-        y: this.bottomRight.y - this.topLeft.y
-      };
-      return {
-        x: this.topLeft.x + dimensions.x / 2,
-        y: this.topLeft.y + dimensions.y / 2
-      };
+    function draw() {
+        if (generateParticleTrails()) {
+            requestAnimationFrame(draw);
+        } else {
+            console.log("done.");
+        }
     }
 
-    checkCollision(pos, size) {
-      if (
-              pos.x + size <= this.topLeft.x ||
-              pos.x - size >= this.bottomRight.x ||
-              pos.y + size <= this.topLeft.y ||
-              pos.y - size >= this.bottomRight.y
-      ) {
+    function getSizeConfig(trailIndex) {
+        for (let i = 0; i < sizeConfig.length - 1; i++) {
+            if (trailIndex >= sizeConfig[i][0] && trailIndex <= sizeConfig[i + 1][0]) {
+                return sizeConfig[i];
+            }
+        }
+        return sizeConfig[sizeConfig.length - 1];
+    }
+
+    function generateParticleTrails() {
+        let addedTrails = 0;
+        for (let i = 0; i < 500; i++) {
+            const [_, minSize, maxSize] = getSizeConfig(trails.length);
+            const x = Math.random() * window.innerWidth;
+            const y = Math.random() * window.innerHeight;
+            const start = {x: x, y: y};
+            const mainColor = getRandomColor(hexColors);
+            if (calculateParticleTrail(start, minSize, maxSize, mainColor)) {
+                addedTrails++;
+                if (addedTrails > 5) {
+                    return true;
+                }
+            }
+        }
         return false;
-      }
+    }
 
-      for (let segment of this.points) {
-        if (Math.hypot(segment.position.x - pos.x, segment.position.y - pos.y) < size + segment.radius) {
-          return true;
+    function calculateParticleTrail(pos, minSize, maxSize, mainColor) {
+        const line = [];
+        let size = minSize + Math.random() * (maxSize - minSize);
+        let trailForceScalar = forceScalar;
+        if (size <= 4) {
+            // in thinner trails the radius is smaller than position delta, making the render circles not overlap
+            // so let's do smaller steps to get continuous lines
+            trailForceScalar *= 0.4;
         }
-      }
-      return false;
-    }
-  }
 
-  let palettes = [
-    "dad7cd-a3b18a-588157-3a5a40-344e41",
-    "6f1d1b-bb9457-432818-99582a-ffe6a7",
-    "001427-708d81-f4d58d-bf0603-8d0801",
-    "006d77-83c5be-edf6f9-ffddd2-e29578",
-    "01161e-124559-598392-aec3b0-eff6e0",
-    "582f0e-7f4f24-936639-a68a64-b6ad90-c2c5aa-a4ac86-656d4a-414833-333d29",
-  ];
+        for (let i = 0; i < 500; i++) {
+            const col = Math.floor(pos.x / gridScale);
+            const row = Math.floor(pos.y / gridScale);
+            if (col < 0 || col >= flowFieldCols || row < 0 || row >= flowFieldRows) {
+                break;
+            }
+            const force = flowField[col][row];
 
-  let hexColors;
-  let sizeConfig = [
-    [0, 30, 9, 12],
-    [30, 100, 6, 8],
-    [100, 3000, 2, 1]
-  ];
-
-  let trails = [];
-  let cols, rows;
-  let gridScale = 20;
-  let flowField;
-  const svgCanvas = document.getElementById("svgCanvas");
-
-  function extractHexColors(palettes) {
-    let randomUrl = palettes[Math.floor(Math.random() * palettes.length)];
-    return randomUrl.split("-");
-  }
-
-  function pickRandomColor(hexColors) {
-    return `#${hexColors[Math.floor(Math.random() * hexColors.length)]}`;
-  }
-
-  let perlinNoise = new Perlin();
-  let frameCount = 0;
-
-  function setup() {
-
-    if (window.innerWidth < 800) {
-      sizeConfig[0][1] = 6;
-      sizeConfig[1][0] = 6;
-    }
-
-    let background = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-    background.setAttribute("width", window.innerWidth);
-    background.setAttribute("height", window.innerHeight);
-    background.setAttribute("fill", "black");
-
-    // Append the background rectangle to the SVG canvas
-    svgCanvas.appendChild(background);
-
-    cols = Math.floor(window.innerWidth / gridScale);
-    rows = Math.floor(window.innerHeight / gridScale);
-    hexColors = extractHexColors(palettes);
-    flowField = new Array(cols).fill().map(() => new Array(rows).fill(null));
-
-    let scale = 0.021; // Scale factor for the noise
-
-    for (let i = 0; i < cols; i++) {
-      for (let j = 0; j < rows; j++) {
-        // Use Perlin noise to generate an angle
-        let angle = perlinNoise.noise(i * scale, j * scale) * Math.PI * 2;
-        flowField[i][j] = {x: Math.cos(angle), y: Math.sin(angle)}; // Convert angle to vector
-      }
-    }
-    requestAnimationFrame(draw);
-  }
-
-  function draw() {
-    frameCount++;
-
-    // Generate new particle trails for each frame
-    generateParticleTrails();
-
-    // Call the draw function for the next frame
-    requestAnimationFrame(draw);
-  }
-
-  function getSizeConfig(i) {
-    for (let config of sizeConfig) {
-      if (i >= config[0] && i < config[1]) {
-        return [config[2], config[3]];
-      }
-    }
-    let lastConfig = sizeConfig[sizeConfig.length - 1];
-    return [lastConfig[2], lastConfig[3]];
-  }
-
-  function generateParticleTrails() {
-    let addedTrails = 0;
-    for (let i = 0; i < 100; i++) {
-      let [minSize, maxSize] = getSizeConfig(trails.length);
-      let x = Math.random() * window.innerWidth;
-      let y = Math.random() * window.innerHeight;
-      let start = {x: x, y: y};
-      let mainColor = pickRandomColor(hexColors);
-      if (calculateParticleTrail(start, minSize, maxSize, mainColor)) {
-        addedTrails++;
-        if (addedTrails > 5) {
-          return;
+            pos.x += force.x * trailForceScalar;
+            pos.y += force.y * trailForceScalar;
+            if (!checkCollision(pos, size * trailSpacing * 2)) {
+                line.push(new LineSegment({...pos}, size));
+            } else {
+                break;
+            }
         }
-      }
-    }
-  }
 
-  function calculateParticleTrail(pos, minSize, maxSize, mainColor) {
-    let line = [];
-    let size = minSize + Math.random() * (maxSize - minSize);
+        if (line.length <= 6) return false;
 
-    for (let i = 0; i < 500; i++) {
-      let col = Math.floor(pos.x / gridScale);
-      let row = Math.floor(pos.y / gridScale);
-
-      if (col < 0 || col >= cols || row < 0 || row >= rows) {
-        break;  // Exit the loop if out of bounds
-      }
-      let force = flowField[col][row];
-
-      const forceScalar = 2;
-      pos.x += force.x * forceScalar;
-      pos.y += force.y * forceScalar;
-
-      if (pos.x > window.innerWidth || pos.x < 0 || pos.y > window.innerHeight || pos.y < 0) break;
-
-      if (!checkCollision(pos, size * 2.4)) {
-        line.push(new LineSegment({...pos}, size));
-      } else {
-        break;
-      }
-    }
-
-    if (line.length <= 6) return false;
-
-    let particleTrail = new ParticleTrail();
-    particleTrail.points = line;
-    particleTrail.size = size;
-    particleTrail.mainColor = mainColor;
-    particleTrail.updateAABB();
-    trails.push(particleTrail);
-    renderParticleTrail(particleTrail);
-    return true;
-  }
-
-  function renderParticleTrail(particleTrail) {
-    let trailColor = particleTrail.mainColor;
-
-    const numPoints = particleTrail.points.length;
-    for (let i = 0; i < numPoints - 1; i++) {
-      let segment = particleTrail.points[i];
-      let radius = particleTrail.size * Math.sin(3.1415 * i / numPoints);
-
-      // Create a circle for each segment
-      let circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-      circle.setAttribute("cx", segment.position.x); // Set circle's x position
-      circle.setAttribute("cy", segment.position.y); // Set circle's y position
-      circle.setAttribute("r", radius); // Set radius of the circle
-      circle.setAttribute("fill", trailColor); // Set color of the circle
-
-      svgCanvas.appendChild(circle); // Add circle to the SVG canvas
-    }
-  }
-
-  function checkCollision(pos, size) {
-    for (let particleTrail of trails) {
-      if (particleTrail.checkCollision(pos, size)) {
+        let particleTrail = new ParticleTrail();
+        particleTrail.points = line;
+        particleTrail.size = size;
+        particleTrail.mainColor = mainColor;
+        particleTrail.updateAABB();
+        trails.push(particleTrail);
+        renderParticleTrail(particleTrail);
         return true;
-      }
     }
-    return false;
-  }
 
-  setup();
+
+    function hexToHsl(hex) {
+        // Convert hex to RGB first
+        let r = parseInt(hex.slice(1, 3), 16) / 255;
+        let g = parseInt(hex.slice(3, 5), 16) / 255;
+        let b = parseInt(hex.slice(5, 7), 16) / 255;
+
+        // Find min and max values to get luminance
+        let max = Math.max(r, g, b);
+        let min = Math.min(r, g, b);
+        let h, s, l = (max + min) / 2;
+
+        if (max == min) {
+            h = s = 0; // achromatic
+        } else {
+            let d = max - min;
+            s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+
+            switch (max) {
+                case r:
+                    h = (g - b) / d + (g < b ? 6 : 0);
+                    break;
+                case g:
+                    h = (b - r) / d + 2;
+                    break;
+                case b:
+                    h = (r - g) / d + 4;
+                    break;
+            }
+
+            h /= 6;
+        }
+
+        return [Math.round(h * 360), s * 100, l * 100]; // Return HSL values
+    }
+
+    function renderParticleTrail(particleTrail) {
+        let trailColor = particleTrail.mainColor;
+
+        const [baseHue, baseSaturation, baseLightness] = hexToHsl(trailColor);
+
+        const numPoints = particleTrail.points.length;
+        for (let i = 0; i < numPoints - 1; i++) {
+            const segment = particleTrail.points[i];
+            const radius = particleTrail.size * Math.sin(Math.PI * i / numPoints);
+
+            let circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+            circle.setAttribute("cx", segment.position.x);
+            circle.setAttribute("cy", segment.position.y);
+            circle.setAttribute("r", radius);
+
+            if (useGradients) {
+                const lightnessFactor = 0.4 + 0.6 * Math.sin(Math.PI * i / numPoints);
+                const dynamicLightness = baseLightness * lightnessFactor;
+                const hueShift = Math.floor((i / numPoints) * 60);
+                const dynamicHue = (baseHue + hueShift) % 360;
+                const dynamicColor = `hsl(${dynamicHue}, ${baseSaturation}%, ${dynamicLightness}%)`;
+                circle.setAttribute("fill", dynamicColor);
+            } else {
+                circle.setAttribute("fill", trailColor);
+            }
+
+            svgCanvas.appendChild(circle);
+        }
+    }
+
+    function checkCollision(pos, size) {
+        for (let particleTrail of trails) {
+            if (particleTrail.checkCollision(pos, size)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    setup();
+    requestAnimationFrame(draw);
 </script>
 </body>
 </html>
