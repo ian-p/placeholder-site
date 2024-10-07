@@ -138,6 +138,7 @@
 
     let hexColors;
     let trails = [];
+    let discardedTrails = 0;
     let gridScale = 10;
     const forceScalar = 2;
     let flowField;
@@ -188,9 +189,8 @@
     }
 
     class LineSegment {
-        constructor(position, radius) {
-            this.position = position;
-            this.radius = radius;
+        constructor(pos) {
+            this.pos = pos;
         }
     }
 
@@ -209,8 +209,8 @@
             this.bottomRight = {x: -Infinity, y: -Infinity};
 
             for (const segment of this.points) {
-                const pos = segment.position;
-                const radius = segment.radius;
+                const pos = segment.pos;
+                const radius = this.size; //segment.radius;
 
                 if (pos.x - radius < this.topLeft.x) this.topLeft.x = pos.x - radius;
                 if (pos.y - radius < this.topLeft.y) this.topLeft.y = pos.y - radius;
@@ -231,7 +231,8 @@
             }
 
             for (const segment of this.points) {
-                if (Math.hypot(segment.position.x - pos.x, segment.position.y - pos.y) < size + this.size) {
+                //if (Math.hypot(segment.pos.x - pos.x, segment.pos.y - pos.y) < size + this.size) {
+                if (Math.pow(segment.pos.x - pos.x, 2) + Math.pow(segment.pos.y - pos.y, 2) < Math.pow(size + this.size, 2)) {
                     return true;
                 }
             }
@@ -273,6 +274,8 @@
                 if (addedTrails > 5) {
                     return true;
                 }
+            } else {
+                discardedTrails++;
             }
         }
         return false;
@@ -367,8 +370,8 @@
             const radius = particleTrail.size * Math.sin(Math.PI * i / numPoints);
 
             const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-            circle.setAttribute("cx", segment.position.x);
-            circle.setAttribute("cy", segment.position.y);
+            circle.setAttribute("cx", segment.pos.x);
+            circle.setAttribute("cy", segment.pos.y);
             circle.setAttribute("r", radius);
 
             if (useGradients) {
@@ -415,12 +418,19 @@
         }
     }
 
+    let frame = 0;
     function draw() {
+
         if (generateParticleTrails()) {
             requestAnimationFrame(draw);
+            if (frame % 30 === 0) {
+                console.log(`${trails.length} added, ${discardedTrails} discarded.`)
+            }
+
         } else {
             console.log("done.");
         }
+        frame++;
     }
 
     setup();
