@@ -52,11 +52,29 @@
             display: flex;
             justify-content: center;
             align-items: center;
+            flex-direction: column;
         }
 
         #seed {
             color: #e01010;
             font-weight: normal;
+        }
+
+
+        /* Link styling */
+        a {
+            color: inherit; /* Makes link color the same as surrounding text */
+            text-decoration: underline; /* Keeps the underscore */
+        }
+
+        /* Reduce space between paragraphs */
+        #belowSvg p {
+            margin: 0;
+            padding: 0;
+        }
+
+        #belowSvg p + p {
+            margin-top: 0.5rem; /* Adjust as necessary to control spacing */
         }
     </style>
 </head>
@@ -66,6 +84,7 @@
 </div>
 <div id="belowSvg">
     <p>random seed = <span id='seed'></span></p>
+    <p><a href="https://github.com/ian-p/placeholder-site">source</a></p>
 </div>
 
 <script>
