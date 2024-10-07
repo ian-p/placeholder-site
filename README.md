@@ -8,7 +8,8 @@ Here are some more details if you'd like to modify my code or write your own:
 ## Vector field
 
 This article: https://www.tylerxhobbs.com/words/fidenza is a great starting point. The author pretty much explains everything and mentions collision detection, without many details though.
-Trails
+
+## Trails
 
 Each of the lines you see is a trail of a particle that went through the vector field. To fit them nicely on the canvas, first the thickest are drawn, then medium-sized, and then the smallest. There are a few presets (sizeConfigs) describing the amount and thickness of each group. One is randomly picked at the beginning.
 
