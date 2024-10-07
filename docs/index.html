@@ -3,32 +3,98 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>...</title>
+    <title>.</title>
+    <link rel="icon" href="data:;base64,=">
+
     <style>
         body, html {
             margin: 0;
             padding: 0;
             overflow: hidden;
+            background-color: #0f1020;
             width: 100%;
             height: 100%;
+            font-family: "Helvetica Neue", Arial, sans-serif;
+            font-weight: lighter;
+            letter-spacing: 0.05em;
+            font-size: clamp(1.2rem, 1.5vw, 1.5rem);
+        }
+
+        #svgContainer {
+            position: absolute;
+            top: 10%;
+            left: 10%;
+            right: 10%;
+            width: 80vw;
+            height: 70vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
         }
 
         svg {
             width: 100%;
             height: 100%;
+            object-fit: contain;
+            max-width: 1000px;
+            max-height: 1000px;
             display: block;
+            background-color: #0f1020;
+        }
+
+        #belowSvg {
             position: absolute;
-            top: 0;
-            left: 0;
+            top: calc(10% + 70vh);
+            left: 10%;
+            right: 10%;
+            height: 20%;
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #seed {
+            color: #e01010;
+            font-weight: normal;
         }
     </style>
 </head>
 <body>
-<svg id="svgCanvas" xmlns="http://www.w3.org/2000/svg"></svg>
+<div id="svgContainer">
+    <svg id="svgCanvas" xmlns="http://www.w3.org/2000/svg"></svg>
+</div>
+<div id="belowSvg">
+    <p>random seed = <span id='seed'></span></p>
+</div>
 
 <script>
+    const seed = Math.floor(Math.random() * 10000000);
+
+    // Show the seed, although since there's no way to initialize it manually it's pretty useless for now.
+    document.getElementById('seed').textContent = seed;
+
+    // Deterministic random :)
+    function seededRandom(seed) {
+        // Constants for the LCG algorithm (32-bit)
+        const a = 1664525;
+        const c = 1013904223;
+        const m = 2 ** 32;
+        let state = seed >>> 0; // Force seed to be a 32-bit unsigned integer
+
+        // Function to generate the next random number
+        return function() {
+            state = (a * state + c) >>> 0; // Perform unsigned 32-bit arithmetic
+            return state / m; // Returns a number between 0 and 1
+        };
+    }
+    const random = seededRandom(seed);
+
+    const svgCanvas = document.getElementById("svgCanvas");
+    const canvasSize = svgCanvas.getBoundingClientRect();
+
     const WIDE_SCREEN_WIDTH_BREAKPOINT = 800;
-    const noiseScale = 0.018 + Math.random() * 0.01;
+    const noiseScale = 0.018 + random() * 0.01;
     const trailSpacing = 1.2;
     const useGradients = true;
 
@@ -45,7 +111,7 @@
         ],
     ];
 
-    if (window.innerWidth >= WIDE_SCREEN_WIDTH_BREAKPOINT) {
+    if (canvasSize.width >= WIDE_SCREEN_WIDTH_BREAKPOINT) {
         sizeConfigs.push([
             [0, 9, 11],
             [20, 6, 8],
@@ -59,7 +125,7 @@
         ]);
     }
 
-    const sizeConfig = sizeConfigs[Math.floor(Math.random() * sizeConfigs.length)];
+    const sizeConfig = sizeConfigs[Math.floor(random() * sizeConfigs.length)];
 
     let palettes = [
         "dad7cd-a3b18a-588157-3a5a40-344e41",
@@ -71,19 +137,18 @@
     ];
 
     let hexColors;
-
     let trails = [];
     let gridScale = 10;
     const forceScalar = 2;
     let flowField;
     let flowFieldCols, flowFieldRows;
-    const svgCanvas = document.getElementById("svgCanvas");
+    let perlinNoise;
 
     class Perlin {
         constructor() {
             this.perm = [];
             for (let i = 0; i < 256; i++) this.perm[i] = i;
-            this.perm.sort(() => Math.random() - 0.5);
+            this.perm.sort(() => random() - 0.5);
             this.perm = [...this.perm, ...this.perm];
         }
 
@@ -136,15 +201,16 @@
             this.mainColor = "#000000";
             this.topLeft = {x: Infinity, y: Infinity};
             this.bottomRight = {x: -Infinity, y: -Infinity};
+            this.length = 0;
         }
 
         updateAABB() {
             this.topLeft = {x: Infinity, y: Infinity};
             this.bottomRight = {x: -Infinity, y: -Infinity};
 
-            for (let segment of this.points) {
-                let pos = segment.position;
-                let radius = segment.radius;
+            for (const segment of this.points) {
+                const pos = segment.position;
+                const radius = segment.radius;
 
                 if (pos.x - radius < this.topLeft.x) this.topLeft.x = pos.x - radius;
                 if (pos.y - radius < this.topLeft.y) this.topLeft.y = pos.y - radius;
@@ -164,8 +230,8 @@
                 return false;
             }
 
-            for (let segment of this.points) {
-                if (Math.hypot(segment.position.x - pos.x, segment.position.y - pos.y) < size + segment.radius) {
+            for (const segment of this.points) {
+                if (Math.hypot(segment.position.x - pos.x, segment.position.y - pos.y) < size + this.size) {
                     return true;
                 }
             }
@@ -174,46 +240,11 @@
     }
 
     function extractHexColors(palettes) {
-        let randomUrl = palettes[Math.floor(Math.random() * palettes.length)];
-        return randomUrl.split("-");
+        return palettes[Math.floor(random() * palettes.length)].split("-");
     }
 
     function getRandomColor(hexColors) {
-        return `#${hexColors[Math.floor(Math.random() * hexColors.length)]}`;
-    }
-
-    let perlinNoise = new Perlin();
-
-    function setup() {
-        if (window.innerWidth < WIDE_SCREEN_WIDTH_BREAKPOINT) {
-            sizeConfig[1][0] = 6;
-        }
-
-        let background = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-        background.setAttribute("width", window.innerWidth);
-        background.setAttribute("height", window.innerHeight);
-        background.setAttribute("fill", "#0f1020");
-        svgCanvas.appendChild(background);
-
-        flowFieldCols = Math.floor(window.innerWidth / gridScale);
-        flowFieldRows = Math.floor(window.innerHeight / gridScale);
-        hexColors = extractHexColors(palettes);
-        flowField = new Array(flowFieldCols).fill().map(() => new Array(flowFieldRows).fill(null));
-
-        for (let i = 0; i < flowFieldCols; i++) {
-            for (let j = 0; j < flowFieldRows; j++) {
-                const angle = perlinNoise.noise(i * noiseScale, j * noiseScale) * Math.PI * 2;
-                flowField[i][j] = {x: Math.cos(angle), y: Math.sin(angle)};
-            }
-        }
-    }
-
-    function draw() {
-        if (generateParticleTrails()) {
-            requestAnimationFrame(draw);
-        } else {
-            console.log("done.");
-        }
+        return `#${hexColors[Math.floor(random() * hexColors.length)]}`;
     }
 
     function getSizeConfig(trailIndex) {
@@ -229,11 +260,15 @@
         let addedTrails = 0;
         for (let i = 0; i < 500; i++) {
             const [_, minSize, maxSize] = getSizeConfig(trails.length);
-            const x = Math.random() * window.innerWidth;
-            const y = Math.random() * window.innerHeight;
+            const x = random() * canvasSize.width;
+            const y = random() * canvasSize.height;
             const start = {x: x, y: y};
             const mainColor = getRandomColor(hexColors);
-            if (calculateParticleTrail(start, minSize, maxSize, mainColor)) {
+            const trail = calculateParticleTrail(start, minSize, maxSize, mainColor);
+
+            if (trail) {
+                renderParticleTrail(trails[trails.length - 1]);
+
                 addedTrails++;
                 if (addedTrails > 5) {
                     return true;
@@ -245,7 +280,8 @@
 
     function calculateParticleTrail(pos, minSize, maxSize, mainColor) {
         const line = [];
-        let size = minSize + Math.random() * (maxSize - minSize);
+        const size = minSize + random() * (maxSize - minSize);
+        let length = 0;
         let trailForceScalar = forceScalar;
         if (size <= 4) {
             // in thinner trails the radius is smaller than position delta, making the render circles not overlap
@@ -261,43 +297,47 @@
             }
             const force = flowField[col][row];
 
-            pos.x += force.x * trailForceScalar;
-            pos.y += force.y * trailForceScalar;
+            const dx = force.x * trailForceScalar;
+            const dy = force.y * trailForceScalar;
+            pos.x += dx;
+            pos.y += dy;
             if (!checkCollision(pos, size * trailSpacing * 2)) {
                 line.push(new LineSegment({...pos}, size));
             } else {
                 break;
             }
+            length += Math.sqrt(dx*dx + dy*dy);
         }
 
-        if (line.length <= 6) return false;
+        if (line.length <= 6) {
+            return false;
+        }
 
         let particleTrail = new ParticleTrail();
         particleTrail.points = line;
         particleTrail.size = size;
         particleTrail.mainColor = mainColor;
+        particleTrail.length = length;
         particleTrail.updateAABB();
         trails.push(particleTrail);
-        renderParticleTrail(particleTrail);
-        return true;
+        return particleTrail;
     }
-
 
     function hexToHsl(hex) {
         // Convert hex to RGB first
-        let r = parseInt(hex.slice(1, 3), 16) / 255;
-        let g = parseInt(hex.slice(3, 5), 16) / 255;
-        let b = parseInt(hex.slice(5, 7), 16) / 255;
+        const r = parseInt(hex.slice(1, 3), 16) / 255;
+        const g = parseInt(hex.slice(3, 5), 16) / 255;
+        const b = parseInt(hex.slice(5, 7), 16) / 255;
 
         // Find min and max values to get luminance
-        let max = Math.max(r, g, b);
-        let min = Math.min(r, g, b);
+        const max = Math.max(r, g, b);
+        const min = Math.min(r, g, b);
         let h, s, l = (max + min) / 2;
 
-        if (max == min) {
+        if (max === min) {
             h = s = 0; // achromatic
         } else {
-            let d = max - min;
+            const d = max - min;
             s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
 
             switch (max) {
@@ -319,16 +359,14 @@
     }
 
     function renderParticleTrail(particleTrail) {
-        let trailColor = particleTrail.mainColor;
-
+        const trailColor = particleTrail.mainColor;
         const [baseHue, baseSaturation, baseLightness] = hexToHsl(trailColor);
-
         const numPoints = particleTrail.points.length;
         for (let i = 0; i < numPoints - 1; i++) {
             const segment = particleTrail.points[i];
             const radius = particleTrail.size * Math.sin(Math.PI * i / numPoints);
 
-            let circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+            const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
             circle.setAttribute("cx", segment.position.x);
             circle.setAttribute("cy", segment.position.y);
             circle.setAttribute("r", radius);
@@ -343,18 +381,46 @@
             } else {
                 circle.setAttribute("fill", trailColor);
             }
-
             svgCanvas.appendChild(circle);
         }
     }
 
     function checkCollision(pos, size) {
-        for (let particleTrail of trails) {
+        for (const particleTrail of trails) {
             if (particleTrail.checkCollision(pos, size)) {
                 return true;
             }
         }
         return false;
+    }
+
+    function setup() {
+        document.getElementById("seed").innerText = seed;
+
+        if (canvasSize.width < WIDE_SCREEN_WIDTH_BREAKPOINT) {
+            sizeConfig[1][0] = 6;
+        }
+
+        flowFieldCols = Math.floor(canvasSize.width / gridScale);
+        flowFieldRows = Math.floor(canvasSize.height / gridScale);
+        hexColors = extractHexColors(palettes);
+        flowField = new Array(flowFieldCols).fill().map(() => new Array(flowFieldRows).fill(null));
+
+        perlinNoise = new Perlin();
+        for (let i = 0; i < flowFieldCols; i++) {
+            for (let j = 0; j < flowFieldRows; j++) {
+                const angle = perlinNoise.noise(i * noiseScale, j * noiseScale) * Math.PI * 2;
+                flowField[i][j] = {x: Math.cos(angle), y: Math.sin(angle)};
+            }
+        }
+    }
+
+    function draw() {
+        if (generateParticleTrails()) {
+            requestAnimationFrame(draw);
+        } else {
+            console.log("done.");
+        }
     }
 
     setup();
