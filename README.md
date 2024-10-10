@@ -1,3 +1,5 @@
+![Sample generated image](assets/sample-1.jpg)
+
 Oh, you're the source-checking kind. Welcome, Stranger!
 
 The way it's generated is pretty simple: Create a vector field using Perlin noise, then randomly put particles in it and let them flow, saving their trails to an array. Reject those that overlap with others. They are rendered using SVG circles, placed along each trail.
