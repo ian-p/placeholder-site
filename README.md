@@ -16,11 +16,16 @@ Each of the lines you see is a trail of a particle that went through the vector 
 
 ## Collision detection
 
-Adding a new particle trail works like this: start at a random point for 500 steps: move along the vector field if the newly added segment would collide`(1)` with any existing ones, break if the trail is shorter than X, discard it and start over`(2)` calculate AABB and add to trails.
+Adding a new particle trail works like this:
+* start at a random point 
+* for 500 steps: 
+  * move along the vector field 
+  * if the newly added segment would collide`(1)` with any existing ones. break 
+* if the trail is shorter than X, discard it and start over`(2)` 
+* else calculate AABB and add to trails.
 
-`(1)` Checking for collision first checks AABB (see https://noonat.github.io/intersect/) so it doesn't take ages, and if AABB collides, does precise checks against all existing segments. Note that the precise checks are done using constant size (trail.size) along the whole path and don't take the size changes that happen during rendering into account. It's easy to precalculate and store radii, but visually there wasn't much difference, so I didn’t do so.  
+`(1)` Checking for collision first checks AABB (see https://noonat.github.io/intersect/) so it doesn't take ages, and if AABB collides, does precise checks against all existing segments. Note that the precise checks are done using constant size (trail.size) along the whole path and don't take the size changes that happen during rendering into account. It's easy to precalculate and store radii, but visually there wasn't much difference, so I didn’t do so.    
 `(2)` Most of the trails are discarded; check the console. Example for a wide-screen run: 1986 added, 20535 discarded.
-
 
 ## Rendering
 
