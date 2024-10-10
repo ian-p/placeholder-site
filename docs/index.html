@@ -4,7 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Janek and the Machine</title>
-    <meta name="description" content="Janek Puziewicz's personal website. Fun things with no benefit to humanity whatsoever.">
+    <meta name="description"
+          content="Janek Puziewicz's personal website. Fun things with no benefit to humanity whatsoever.">
     <link rel="icon" href="data:;base64,=">
 
     <style>
@@ -13,12 +14,14 @@
             padding: 0;
             overflow: hidden;
             background-color: #0f1020;
+
             width: 100%;
             height: 100%;
             font-family: "Helvetica Neue", Arial, sans-serif;
             font-weight: lighter;
             letter-spacing: 0.05em;
-            font-size: clamp(1.0rem, 1.3vw, 1.4rem);
+            font-size: clamp(1rem, 1.1vw, 1.1rem);
+            color: #ccc;
         }
 
         #svgContainer {
@@ -49,32 +52,39 @@
             left: 10%;
             right: 10%;
             height: 20%;
-            color: white;
             display: flex;
             justify-content: center;
             align-items: center;
             flex-direction: column;
         }
 
-        #seed {
-            color: #e01010;
-            font-weight: normal;
-        }
-
-        /* Link styling */
         a {
             color: inherit; /* Makes link color the same as surrounding text */
             text-decoration: underline; /* Keeps the underscore */
+            text-decoration-color: #666;
         }
 
-        /* Reduce space between paragraphs */
         #belowSvg p {
             margin: 0;
             padding: 0;
         }
 
         #belowSvg p + p {
-            margin-top: 0.5rem; /* Adjust as necessary to control spacing */
+            margin-top: 1rem;
+        }
+        #instructions {
+            visibility: hidden; /* Keep the space, but hide content */
+            opacity: 0;
+            transition: opacity 1s ease-in-out;
+        }
+
+        #instructions.visible {
+            visibility: visible; /* Show element */
+            opacity: 1;
+        }
+
+        #instructions.fade-out {
+            opacity: 0;
         }
     </style>
 </head>
@@ -83,15 +93,12 @@
     <svg id="svgCanvas" xmlns="http://www.w3.org/2000/svg"></svg>
 </div>
 <div id="belowSvg">
-    <p>random seed = <span id='seed'></span></p>
+    <p><span id="instructions">Reload for a new image</span> </p>
     <p><a href="https://github.com/ian-p/placeholder-site">source</a></p>
 </div>
 
 <script>
     const seed = Math.floor(Math.random() * 10000000);
-
-    // Show the seed, although since there's no way to initialize it manually it's pretty useless for now.
-    document.getElementById('seed').textContent = seed;
 
     // Deterministic random :)
     function seededRandom(seed) {
@@ -102,17 +109,19 @@
         let state = seed >>> 0; // Force seed to be a 32-bit unsigned integer
 
         // Function to generate the next random number
-        return function() {
+        return function () {
             state = (a * state + c) >>> 0; // Perform unsigned 32-bit arithmetic
             return state / m; // Returns a number between 0 and 1
         };
     }
+
     const random = seededRandom(seed);
 
     const svgCanvas = document.getElementById("svgCanvas");
     const canvasSize = svgCanvas.getBoundingClientRect();
 
     const WIDE_SCREEN_WIDTH_BREAKPOINT = 800;
+    const TRAIL_GENERATION_STEPS = 500;
     const noiseScale = 0.018 + random() * 0.01;
     const trailSpacing = 1.2;
     const useGradients = true;
@@ -163,6 +172,7 @@
     let flowField;
     let flowFieldCols, flowFieldRows;
     let perlinNoise;
+    let frame = 0;
 
     class Perlin {
         constructor() {
@@ -278,7 +288,7 @@
 
     function generateParticleTrails() {
         let addedTrails = 0;
-        for (let i = 0; i < 500; i++) {
+        for (let i = 0; i < TRAIL_GENERATION_STEPS; i++) {
             const [_, minSize, maxSize] = getSizeConfig(trails.length);
             const x = random() * canvasSize.width;
             const y = random() * canvasSize.height;
@@ -328,7 +338,7 @@
             } else {
                 break;
             }
-            length += Math.sqrt(dx*dx + dy*dy);
+            length += Math.sqrt(dx * dx + dy * dy);
         }
 
         if (line.length <= 6) {
@@ -416,9 +426,19 @@
         return false;
     }
 
-    function setup() {
-        document.getElementById("seed").innerText = seed;
+    function initializeInstructions()
+    {
+        const instructions = document.getElementById('instructions');
+        setTimeout(() => {
+            instructions.classList.add('visible');
+        }, 2000);
 
+        setTimeout(() => {
+            instructions.classList.add('fade-out');
+        }, 8000);
+    }
+
+    function setup() {
         if (canvasSize.width < WIDE_SCREEN_WIDTH_BREAKPOINT) {
             sizeConfig[1][0] = 6;
         }
@@ -435,11 +455,9 @@
                 flowField[i][j] = {x: Math.cos(angle), y: Math.sin(angle)};
             }
         }
+        initializeInstructions();
     }
-
-    let frame = 0;
     function draw() {
-
         if (generateParticleTrails()) {
             requestAnimationFrame(draw);
             if (frame % 30 === 0) {
