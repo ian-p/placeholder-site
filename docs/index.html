@@ -59,8 +59,8 @@
         }
 
         a {
-            color: inherit; /* Makes link color the same as surrounding text */
-            text-decoration: underline; /* Keeps the underscore */
+            color: inherit;
+            text-decoration: underline;
             text-decoration-color: #666;
         }
 
@@ -72,14 +72,15 @@
         #belowSvg p + p {
             margin-top: 1rem;
         }
+
         #instructions {
-            visibility: hidden; /* Keep the space, but hide content */
+            visibility: hidden;
             opacity: 0;
             transition: opacity 1s ease-in-out;
         }
 
         #instructions.visible {
-            visibility: visible; /* Show element */
+            visibility: visible;
             opacity: 1;
         }
 
@@ -93,7 +94,7 @@
     <svg id="svgCanvas" xmlns="http://www.w3.org/2000/svg"></svg>
 </div>
 <div id="belowSvg">
-    <p><span id="instructions">Reload for a new image</span> </p>
+    <p><span id="instructions">Reload for a new image</span></p>
     <p><a href="https://github.com/ian-p/placeholder-site">source</a></p>
 </div>
 
@@ -125,10 +126,12 @@
     const noiseScale = 0.018 + random() * 0.01;
     const trailSpacing = 1.2;
     const useGradients = true;
+    const isBigScreen = canvasSize.width >= WIDE_SCREEN_WIDTH_BREAKPOINT;
+    let minTrailsToAdd = 5;
 
     const sizeConfigs = [
         [
-            [0, 8, 8],
+            [0, 4, 6],
             [20, 4, 4],
             [100, 1, 1]
         ],
@@ -139,29 +142,35 @@
         ],
     ];
 
-    if (canvasSize.width >= WIDE_SCREEN_WIDTH_BREAKPOINT) {
+    if (isBigScreen) {
         sizeConfigs.push([
-            [0, 9, 11],
-            [20, 6, 8],
+            [0, 9, 7],
+            [20, 6, 5],
             [100, 1, 1.5]
         ]);
 
         sizeConfigs.push([
-            [0, 8, 10],
-            [30, 6, 8],
+            [0, 8, 6],
+            [30, 6, 4],
             [100, 1, 1]
         ]);
+    } else {
+        minTrailsToAdd = 1;
     }
 
     const sizeConfig = sizeConfigs[Math.floor(random() * sizeConfigs.length)];
 
     let palettes = [
+        "001524-15616d-ffecd1-ff7d00-78290f",
+        "ff595e-ffca3a-8ac926-1982c4-6a4c93",
+        "9b5de5-f15bb5-fee440-00bbf9-00f5d4",
+        "283d3b-197278-edddd4-c44536-772e25",
         "dad7cd-a3b18a-588157-3a5a40-344e41",
         "6f1d1b-bb9457-432818-99582a-ffe6a7",
-        "001427-708d81-f4d58d-bf0603-8d0801",
-        "006d77-83c5be-edf6f9-ffddd2-e29578",
-        "01161e-124559-598392-aec3b0-eff6e0",
-        "582f0e-7f4f24-936639-a68a64-b6ad90-c2c5aa-a4ac86-656d4a-414833-333d29",
+        // "001427-708d81-f4d58d-bf0603-8d0801",
+        // "006d77-83c5be-edf6f9-ffddd2-e29578",
+        // "01161e-124559-598392-aec3b0-eff6e0",
+        // "582f0e-7f4f24-936639-a68a64-b6ad90-c2c5aa-a4ac86-656d4a-414833-333d29",
     ];
 
     let hexColors;
@@ -300,7 +309,7 @@
                 renderParticleTrail(trails[trails.length - 1]);
 
                 addedTrails++;
-                if (addedTrails > 5) {
+                if (addedTrails > minTrailsToAdd) {
                     return true;
                 }
             } else {
@@ -426,8 +435,7 @@
         return false;
     }
 
-    function initializeInstructions()
-    {
+    function initializeInstructions() {
         const instructions = document.getElementById('instructions');
         setTimeout(() => {
             instructions.classList.add('visible');
@@ -442,7 +450,6 @@
         if (canvasSize.width < WIDE_SCREEN_WIDTH_BREAKPOINT) {
             sizeConfig[1][0] = 6;
         }
-
         flowFieldCols = Math.floor(canvasSize.width / gridScale);
         flowFieldRows = Math.floor(canvasSize.height / gridScale);
         hexColors = extractHexColors(palettes);
@@ -457,6 +464,7 @@
         }
         initializeInstructions();
     }
+
     function draw() {
         if (generateParticleTrails()) {
             requestAnimationFrame(draw);
